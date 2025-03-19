@@ -1,5 +1,5 @@
 User-agent: *
-Disallow: /dataset/?q=
+Disallow: /dataset/?
 Disallow: /dataset/rate/
 Disallow: /revision/
 Disallow: /dataset/*/history
