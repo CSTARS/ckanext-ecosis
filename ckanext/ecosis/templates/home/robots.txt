@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /dataset/?q=
+Disallow: /dataset/rate/
+Disallow: /revision/
+Disallow: /dataset/*/history
+Disallow: /api/
+Crawl-Delay: 30
