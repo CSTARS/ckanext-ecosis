@@ -2,12 +2,12 @@ import json, os
 import ckan.plugins as plugins
 import ckan.plugins.toolkit as tk
 import ckan.lib.base as base
-from ckan.common import config
+from ckan.common import config, current_user
 from ckan.logic.action.create import organization_member_create
 from ckan.logic.action.delete import organization_member_delete
 import ckan.logic as logic
 
-from flask import Blueprint, make_response, send_from_directory
+from flask import Blueprint, make_response, send_from_directory, request, redirect
 import ckanext.ecosis.lib.utils as utils
 
 import ckanext.ecosis.datastore.query as query
@@ -53,6 +53,70 @@ class EcosisPlugin(plugins.SingletonPlugin,
     REQUIRED_FIELDS = {
       'license_id': { 'label': 'License', 'empty_value' : 'notspecified'}
     }
+
+    # paths that must stay reachable by anonymous visitors so the login
+    # flow itself works and so other services (eg the public ecosis.org
+    # search app) can keep hitting the read-only API
+    LOGIN_WALL_ALLOWED_PATH_PREFIXES = (
+        '/base/',
+        '/webassets/',
+        '/fanstatic/',
+        '/favicon.ico',
+        '/api/',
+        '/user/login',
+        '/user/_logout',
+        '/user/reset',
+        '/ecosis/user/remoteLogin',
+    )
+
+    # dataset/resource read endpoints that stay public when the package
+    # has an applied DOI, so minted DOIs keep resolving to a public page
+    LOGIN_WALL_PUBLIC_DOI_ENDPOINTS = (
+        'dataset.read',
+        'dataset_resource.read',
+        'dataset_resource.download',
+        'resource.read',
+        'resource.download',
+    )
+
+    def _require_login(self):
+        """Flask before_request hook that redirects anonymous visitors to
+        the login page, with exceptions for static assets, the login flow
+        itself, the read-only API, and dataset/resource pages whose
+        package has an applied DOI (which must stay publicly resolvable).
+        """
+        if not tk.asbool(config.get('ecosis.require_login', True)):
+            return None
+
+        path = request.path
+
+        if path.startswith(self.LOGIN_WALL_ALLOWED_PATH_PREFIXES):
+            return None
+
+        if current_user.is_authenticated:
+            return None
+
+        endpoint = request.endpoint or ''
+        if endpoint in self.LOGIN_WALL_PUBLIC_DOI_ENDPOINTS:
+            package_id = (request.view_args or {}).get('id')
+            if package_id:
+                try:
+                    if hasAppliedDoi(package_id):
+                        return None
+                except Exception:
+                    pass
+
+        came_from = path
+        if request.query_string:
+            came_from += '?' + request.query_string.decode('utf-8')
+
+        # build with _external=True (uses ckan.site_url) rather than a bare
+        # relative redirect: Werkzeug's Location-header autocorrection
+        # otherwise rebuilds the URL from the request's Host header, which
+        # behind the ckan-cache/queue proxy chain is the internal docker
+        # service address (eg ckan:5000), not the public site URL
+        login_url = tk.url_for('user.login', came_from=came_from, _external=True)
+        return redirect(login_url)
 
 
     # IClick
@@ -260,8 +324,12 @@ class EcosisPlugin(plugins.SingletonPlugin,
             'get_google_analytics_code' : self.get_google_analytics_code,
             'get_search_url' : self.get_search_url,
             'get_last_pushed_str' : self.get_last_pushed_str,
-            'pushed_to_search' :  self.pushed_to_search
+            'pushed_to_search' :  self.pushed_to_search,
+            'get_admin_email' : self.get_admin_email
         }
+
+    def get_admin_email(self):
+        return config.get('ecosis.admin_email', '')
 
     def pushed_to_search(self, package_id):
         result = query.isPushed(package_id)
@@ -402,6 +470,10 @@ class EcosisPlugin(plugins.SingletonPlugin,
           view_func=controller.getAllGithubInfo)
 
       app.register_blueprint(api)
+
+      # require login for the whole site, see _require_login() for exceptions
+      app.before_request(self._require_login)
+
       return app
 
     def make_error_log_middleware(self, app, config):

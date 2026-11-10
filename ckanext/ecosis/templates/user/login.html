@@ -1,0 +1,16 @@
+{% ckan_extends %}
+
+{% block secondary_content %}
+  {% block help_admin_access %}
+  <section class="module module-narrow module-shallow">
+    {% block help_admin_access_inner %}
+      <h2 class="module-heading">{{ _('Need Access?') }}</h2>
+      <div class="module-content">
+        <p>{% trans %}EcoSIS accounts are created by administrators. To request access, email the EcoSIS admins{% endtrans %}{% if h.get_admin_email() %}{% trans %} at{% endtrans %} <a href="mailto:{{ h.get_admin_email() }}">{{ h.get_admin_email() }}</a>{% endif %}.</p>
+      </div>
+    {% endblock %}
+  </section>
+  {% endblock %}
+
+  {{ super() }}
+{% endblock %}
