@@ -1,4 +1,5 @@
 import json
+from urllib.parse import urlencode
 from flask import make_response
 
 import ckanext.ecosis.lib.utils as utils
@@ -147,8 +148,7 @@ def importPackage():
     inst = DataPackageImporter(package_uri)
     newPkg = inst.run(context)
 
-    headers = {"Location" : "/import/?id=%s" % newPkg.get('id')}
-    return make_response(("Redirecting", 307, headers))
+    return _importer_redirect(id=newPkg.get('id'))
 
 # set a package to private
 def setPrivate():
@@ -229,17 +229,21 @@ def getTemplate():
 # EcoSIS spectra importer app.
 def createPackageRedirect():
     group = request.params.get('group')
-    headers = {}
-
     if group == None:
-      headers["Location"] = "/import/"
-    else:
-      headers["Location"] = "/import/?group=%s" % group
-
-    return make_response(("Redirecting", 307, headers))
+      return _importer_redirect()
+    return _importer_redirect(group=group)
 
 # if someone is trying to access the main CKAN package edit screen, redirect to
 # EcoSIS spectra importer app.
 def editPackageRedirect(id):
-    headers = {"Location" : "/import/?id=%s" % id.encode('ascii','ignore')}
-    return make_response(("Redirecting", 307, headers))
+    return _importer_redirect(id=id)
+
+# build an absolute redirect to the spectra importer app using ckan.site_url.
+# a relative Location header would be rewritten by Werkzeug's
+# autocorrect_location_header using the request Host header, which behind the
+# ckan-cache proxy is the internal docker address (eg http://ckan:5000)
+def _importer_redirect(**params):
+    url = config.get('ckan.site_url', '').rstrip('/') + '/import/'
+    if params:
+        url += '?' + urlencode(params)
+    return make_response(("Redirecting", 307, {"Location": url}))
