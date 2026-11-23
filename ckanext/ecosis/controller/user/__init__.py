@@ -42,7 +42,7 @@ def info():
 
 def remote_login():
     token = request.form.get('token')
-    token = jwt.decode(token, secret, algorithm='HS256')
+    token = jwt.decode(token, secret, algorithms=['HS256'])
 
     username = token.get('username');
     password = token.get('password');
@@ -113,7 +113,7 @@ def set_github_info():
         raise Exception('No jwt token provided')
 
     token = re.sub(r"Bearer ", "", token)
-    token = jwt.decode(token, secret, algorithm='HS256')
+    token = jwt.decode(token, secret, algorithms=['HS256'])
     user_id = token.get("username")
 
     if not user_id:
@@ -132,7 +132,7 @@ def get_all_github_info():
         raise Exception('No jwt token provided')
 
     token = re.sub(r"Bearer ", "", token)
-    jwt.decode(token, secret, algorithm='HS256')
+    jwt.decode(token, secret, algorithms=['HS256'])
 
     githubInfo = githubInfoModel.getAll()
     results = []

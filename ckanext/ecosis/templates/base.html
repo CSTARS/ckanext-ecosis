@@ -1,7 +1,23 @@
 {% ckan_extends %}
 
+{#
+  Replaces (rather than calls super() on) core's meta block so the CSRF token
+  meta tag is only rendered for logged-in users when CSRF is enabled.
+  Rendering csrf_token() writes a token into the session, which made CKAN set
+  a session cookie for every anonymous visitor. Keep the rest in sync with
+  ckan/templates/base.html (CKAN 2.12).
+#}
 {% block meta %}
-  {{ super() }}
+  <meta charset="utf-8" />
+  {% if h.ecosis_csrf_enabled() and current_user.is_authenticated %}
+  <meta name="csrf_field_name" content="{{ g.csrf_field_name }}" />
+  <meta name="{{ g.csrf_field_name }}" content="{{ csrf_token() }}" />
+  {% endif %}
+  <meta name="site-root" content="{{ h.url_for('home.index', locale='default', _external=true) }}" />
+  <meta name="locale-root" content="{{ h.url_for('home.index', _external=true) }}" />
+
+  {% block meta_generator %}<meta name="generator" content="ckan {{ h.ckan_version() }}" />{% endblock %}
+  {% block meta_viewport %}<meta name="viewport" content="width=device-width, initial-scale=1.0">{% endblock %}
   <meta name="robots" content="noindex" />
 
     <style>

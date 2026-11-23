@@ -31,16 +31,10 @@ def get(package_id):
     else:
         package = package[0]
 
-    # extras
-    package['extras'] = {}
-
-    # grab all extra fields where status is not deleted
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    cur.execute("select * from package_extra where package_id = %s and state != 'deleted'", (package_id,))
-    rows = cur.fetchall()
-    for row in rows:
-        package['extras'][row['key']] = row['value']
-    cur.close()
+    # extras: CKAN 2.12 dropped the package_extra table; active extras now
+    # live in the package.extras JSONB column ({key: string value}), which
+    # psycopg2 already decodes to a dict (NULL when a package has none)
+    package['extras'] = package.get('extras') or {}
 
     # append organization information
     ownerOrg = package.get('owner_org')
@@ -84,11 +78,13 @@ def doiQuery(status="", query="", limit=10, offset=0):
 
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(
-        ("select p.title as title, p.id, pe.value as status, pev.value as doi "
-         "from package_extra pe join package p on pe.package_id = p.id "
-         "left join package_extra pev on pev.package_id = p.id and pev.key = 'EcoSIS DOI' "
-         "where pe.key = 'EcoSIS DOI Status' and pe.state != 'deleted' "
-         "and pe.value::json->>'value' = ANY(%s) and lower(p.title) like %s order by title limit %s offset %s;"),
+        # CKAN 2.12: extras are in the package.extras JSONB column
+        ("select p.title as title, p.id, p.extras->>'EcoSIS DOI Status' as status, "
+         "p.extras->>'EcoSIS DOI' as doi "
+         "from package p "
+         "where p.extras ? 'EcoSIS DOI Status' "
+         "and (p.extras->>'EcoSIS DOI Status')::json->>'value' = ANY(%s) "
+         "and lower(p.title) like %s order by title limit %s offset %s;"),
          (status.split(','), query, limit, offset)
         )
     packages = cur.fetchall()

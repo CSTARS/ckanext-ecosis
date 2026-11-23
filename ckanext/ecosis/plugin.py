@@ -3,8 +3,6 @@ import ckan.plugins as plugins
 import ckan.plugins.toolkit as tk
 import ckan.lib.base as base
 from ckan.common import config, current_user
-from ckan.logic.action.create import organization_member_create
-from ckan.logic.action.delete import organization_member_delete
 import ckan.logic as logic
 
 from flask import Blueprint, make_response, send_from_directory, request, redirect
@@ -20,15 +18,31 @@ from ckanext.ecosis.controller import EcosisController
 
 controller = EcosisController()
 
-@tk.side_effect_free
-def organization_member_create_wrapper(context, member_create):
-    organization_member_create(context, member_create)
+# chained actions: run the core action, then notify remotes. (These were
+# previously marked side_effect_free, which wrongly exposed write actions
+# over GET.)
+@tk.chained_action
+def organization_member_create_wrapper(original_action, context, member_create):
+    result = original_action(context, member_create)
     orgController.notify_remotes(member_create.get('id'))
+    return result
 
-@tk.side_effect_free
-def organization_member_delete_wrapper(context, member_delete):
-    organization_member_delete(context, member_delete)
+# The spectra importer always sends `id: ''` when creating a dataset. Since
+# CKAN 2.11, sysadmins may set a dataset id but it must be a UUID, so the empty
+# string fails with "Invalid id provided". Drop an empty id and let CKAN
+# generate one.
+@tk.chained_action
+def package_create_wrapper(original_action, context, data_dict):
+    if 'id' in data_dict and not data_dict.get('id'):
+        data_dict = dict(data_dict)
+        del data_dict['id']
+    return original_action(context, data_dict)
+
+@tk.chained_action
+def organization_member_delete_wrapper(original_action, context, member_delete):
+    result = original_action(context, member_delete)
     orgController.notify_remotes(member_delete.get('id'))
+    return result
 
 class EcosisPlugin(plugins.SingletonPlugin,
         tk.DefaultDatasetForm):
@@ -37,12 +51,15 @@ class EcosisPlugin(plugins.SingletonPlugin,
     Uses a tag vocabulary to add a custom metadata field to datasets.
 
     '''
-    plugins.implements(plugins.IConfigurer)
+    # inherit=True: hooks this plugin doesn't define fall back to the
+    # interface's no-op defaults (CKAN calls every hook on these interfaces,
+    # eg after_resource_create, and new CKAN versions add more)
+    plugins.implements(plugins.IConfigurer, inherit=True)
     plugins.implements(plugins.ITemplateHelpers)
     # plugins.implements(plugins.IRoutes, inherit=True)
-    plugins.implements(plugins.IOrganizationController)
-    plugins.implements(plugins.IPackageController)
-    plugins.implements(plugins.IResourceController)
+    plugins.implements(plugins.IOrganizationController, inherit=True)
+    plugins.implements(plugins.IPackageController, inherit=True)
+    plugins.implements(plugins.IResourceController, inherit=True)
     plugins.implements(plugins.IAuthFunctions)
     plugins.implements(plugins.IActions)
     plugins.implements(plugins.IClick)
@@ -65,6 +82,10 @@ class EcosisPlugin(plugins.SingletonPlugin,
         '/api/',
         '/user/login',
         '/user/_logout',
+        # where CKAN sends you after logging out; if it's walled off, the
+        # login wall sets came_from to it and the next login lands on
+        # "You are now logged out"
+        '/user/logged_out_redirect',
         '/user/reset',
         '/ecosis/user/remoteLogin',
     )
@@ -119,6 +140,16 @@ class EcosisPlugin(plugins.SingletonPlugin,
         return redirect(login_url)
 
 
+    def _redirect_dataset_new(self):
+        """Flask before_request hook: send CKAN's "new dataset" page to the
+        EcoSIS importer. The /dataset/new rule registered in make_middleware
+        loses to core's identical rule on CKAN 2.12, so match on the endpoint
+        instead of relying on route order.
+        """
+        if request.endpoint == 'dataset.new':
+            return controller.createPackageRedirect()
+        return None
+
     # IClick
     def get_commands(self):
         """Implemented for IClick Plugin
@@ -171,7 +202,9 @@ class EcosisPlugin(plugins.SingletonPlugin,
         if self.is_group(entity):
             orgController.notify_remotes(entity.id)
 
-    def after_update(self, context, pkg_dict):
+    # IPackageController (CKAN 2.10+ hook names; the old after_*/before_*
+    # names were removed in CKAN 2.11 and would silently never be called)
+    def after_dataset_update(self, context, pkg_dict):
         if pkg_dict.get('type') == "dataset":    
           # if doi status changed to ACCEPTED, start DOI application process
           resp = handleDoiUpdate(context['before_package_update'], pkg_dict)
@@ -184,17 +217,18 @@ class EcosisPlugin(plugins.SingletonPlugin,
               pkg_dict['doi_user_email'] = resp.get('email')
               pkg_dict['doi_user_name'] = resp.get('user')
 
-    def before_create(self, context, resource):
+    def before_resource_create(self, context, resource):
+        """Implemented for IResourceController"""
         pass
 
-    def after_create(self, context, pkg_dict):
+    def after_dataset_create(self, context, pkg_dict):
         """Implemented for IPackageController"""
         if self.get_class_name(pkg_dict) == "dict": # safety check
             if pkg_dict.get('type') == "dataset":
               pkgController.after_create()
         return pkg_dict
 
-    def before_index(self, pkg_dict):
+    def before_dataset_index(self, pkg_dict):
         """Implemented for IPackageController"""
         return pkg_dict
 
@@ -274,38 +308,56 @@ class EcosisPlugin(plugins.SingletonPlugin,
     def authz_remove_role(self, object_role):
         pass
 
-    def before_delete(self, context, resource, resources):
+    def before_resource_delete(self, context, resource, resources):
+      """Implemented for IResourceController"""
       pass
 
     def delete(self, entity):
-      pass
+      """Implemented for IOrganizationController and IPackageController
 
-    def after_delete(self, context, pkg_dict):
-      if self.is_group(pkg_dict):
-        orgController.delete(pkg_dict)
-      if self.is_package(pkg_dict):
-        deleteUtil.package(pkg_dict.get('id'))
+      IOrganizationController: called with the Group model object before
+      commit inside organization_delete; remove the org's packages from
+      the EcoSIS (MongoDB) workspace/search and notify remotes.
+      """
+      if self.is_group(entity):
+        orgController.delete(entity)
 
-    def after_show(self, context, entity):
+    def after_dataset_delete(self, context, pkg_dict):
+      """Implemented for IPackageController
+
+      pkg_dict is the action's data dict (typically just the id). The old
+      after_delete hook checked for a Package model object here, which a
+      dict never is, so this cleanup did not previously run.
+      """
+      package_id = pkg_dict.get('id') if pkg_dict else None
+      if package_id:
+        deleteUtil.package(package_id)
+
+    def after_dataset_show(self, context, entity):
         return entity
 
-    def before_show(self, resource_dict):
-        pass
+    def before_resource_show(self, resource_dict):
+        return resource_dict
 
-    def before_view(self, pkg_dict):
+    def before_view(self, data_dict):
+        """Implemented for IOrganizationController"""
+        return data_dict
+
+    def before_dataset_view(self, pkg_dict):
         return pkg_dict
 
-    def before_search(self, search_params):
+    def before_dataset_search(self, search_params):
       return search_params
 
-    def after_search(self, search_results, search_params):
+    def after_dataset_search(self, search_results, search_params):
       return search_results
 
     # we need to listen for org create/update/delete events and notify remotes
     def get_actions(self):
         return {
             'organization_member_create' : organization_member_create_wrapper,
-            'organization_member_delete': organization_member_delete_wrapper
+            'organization_member_delete': organization_member_delete_wrapper,
+            'package_create': package_create_wrapper
         }
 
 
@@ -325,8 +377,14 @@ class EcosisPlugin(plugins.SingletonPlugin,
             'get_search_url' : self.get_search_url,
             'get_last_pushed_str' : self.get_last_pushed_str,
             'pushed_to_search' :  self.pushed_to_search,
-            'get_admin_email' : self.get_admin_email
+            'get_admin_email' : self.get_admin_email,
+            'ecosis_csrf_enabled' : self.csrf_enabled
         }
+
+    def csrf_enabled(self):
+        # used by templates to skip rendering CSRF tokens (which create a
+        # session, and so a session cookie) when CSRF protection is disabled
+        return tk.asbool(config.get('WTF_CSRF_ENABLED', True))
 
     def get_admin_email(self):
         return config.get('ecosis.admin_email', '')
@@ -473,6 +531,7 @@ class EcosisPlugin(plugins.SingletonPlugin,
 
       # require login for the whole site, see _require_login() for exceptions
       app.before_request(self._require_login)
+      app.before_request(self._redirect_dataset_new)
 
       return app
 

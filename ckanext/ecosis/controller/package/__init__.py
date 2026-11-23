@@ -35,14 +35,13 @@ def init(co, pgConn):
 # remove a package
 # This will remove from CKAN as well as EcoSIS extension
 def delete():
-    response.headers["Content-Type"] = "application/json"
 
     # grab package id from request
     params = {}
     try:
         params = utils.get_request_data(request)
     except:
-        params = {'id': request.params.get('id')}
+        params = {'id': request.args.get('id')}
 
     if params.get('id') is None:
         raise Exception('No package_id provided')
@@ -66,9 +65,8 @@ def delete():
 # update a package
 # makes sure update is valid does checking against DOI status
 def update():
-    response.headers["Content-Type"] = "application/json"
 
-    params = json.loads(request.body)
+    params = request.get_json(force=True)
 
     hasAccess(params['id'])
     context = get_context()
@@ -152,8 +150,7 @@ def importPackage():
 
 # set a package to private
 def setPrivate():
-    response.headers["Content-Type"] = "application/json"
-    package_id = request.params.get('id')
+    package_id = request.args.get('id')
     hasAccess(package_id)
 
     # can't set a package to private that has a DOI
@@ -171,11 +168,11 @@ def getTemplate():
       "Content-Type" : "application/json"
     }
     
-    package_id = request.params.get('id')
-    format = request.params.get('format')
+    package_id = request.args.get('id')
+    format = request.args.get('format')
 
     # are we only creating a properties alias template?
-    mapOnly = request.params.get('mapOnly')
+    mapOnly = request.args.get('mapOnly')
 
     # check access
     hasAccess(package_id)
@@ -228,7 +225,7 @@ def getTemplate():
 # if someone is trying to access the main CKAN package create screen, redirect to
 # EcoSIS spectra importer app.
 def createPackageRedirect():
-    group = request.params.get('group')
+    group = request.args.get('group')
     if group == None:
       return _importer_redirect()
     return _importer_redirect(group=group)

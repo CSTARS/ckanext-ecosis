@@ -3,6 +3,8 @@
 {% block head_extras %}
   <script>
     // Hack until we can get new flask middleware to handle edit redirects
-    window.location = '/import/?id='+window.location.pathname.split('/').pop();
+    // (/dataset/new is normally redirected server side; never send "new" as an id)
+    var ecosisPkgId = window.location.pathname.split('/').pop();
+    window.location = ecosisPkgId === 'new' ? '/import/' : '/import/?id='+ecosisPkgId;
   </script> 
 {% endblock %}

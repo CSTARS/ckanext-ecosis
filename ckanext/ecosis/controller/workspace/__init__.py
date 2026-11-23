@@ -9,7 +9,7 @@ from ckan.common import request
 import ckan.logic as logic
 
 def prepare():
-    package_id = request.params.get('package_id')
+    package_id = request.args.get('package_id')
 
     # get package by name or id
     context = get_context()
@@ -18,8 +18,8 @@ def prepare():
     if ckanPackage == None:
         raise Exception('Invalid package ID')
 
-    force = request.params.get('force')
-    clean = request.params.get('clean')
+    force = request.args.get('force')
+    clean = request.args.get('clean')
     if force == "true":
         force = True
     else:
@@ -39,8 +39,8 @@ def prepare():
     return jsonStringify(result)
 
 def pushToSearch():
-    package_id = request.params.get('package_id')
-    email = request.params.get('email')
+    package_id = request.args.get('package_id')
+    email = request.args.get('email')
     if email is None:
         email = "false"
 
@@ -60,7 +60,7 @@ def pushToSearch():
     return push.run(ckanPackage, email, user.email, user.display_name)
 
 def get():
-    package_id = request.params.get('package_id')
+    package_id = request.args.get('package_id')
 
     # get package by name or id
     context = get_context()
@@ -69,9 +69,8 @@ def get():
     return jsonStringify(workspaceQuery.get(ckanPackage.get("id")))
 
 def clean():
-    response.headers["Content-Type"] = "application/json"
 
-    package_id = request.params.get('package_id')
+    package_id = request.args.get('package_id')
     workspace.cleanPackage(package_id)
 
     return jsonStringify({

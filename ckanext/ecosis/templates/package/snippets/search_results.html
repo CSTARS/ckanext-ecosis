@@ -1,0 +1,10 @@
+{% ckan_extends %}
+
+{# CKAN 2.12 moved the results list out of package/search.html into this snippet #}
+{% block package_search_results_list %}
+    <div class="top-pager">
+        {{ page.pager(q=q) }}
+    </div>
+
+    {{ super() }}
+{% endblock %}

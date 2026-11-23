@@ -68,9 +68,8 @@ def _delete(params):
 
 # create new resource for dataset
 def create():
-    response.headers["Content-Type"] = "application/json"
 
-    request_data = dict(request.POST)
+    request_data = dict(request.form)
 
     # if the dataset has a DOI applied, you cannot add new resources
     if hasAppliedDoi(request_data.get('package_id')):
@@ -154,9 +153,9 @@ def _process(package_id, sheet_id, resource_id, ids, options):
 # get a specific resource
 # optional sheet id, it the resource has multiple sheets (excel file)
 def get():
-    pid = request.params.get('package_id')
-    rid = request.params.get('resource_id')
-    sid = request.params.get('sheet_id')
+    pid = request.args.get('package_id')
+    rid = request.args.get('resource_id')
+    sid = request.args.get('sheet_id')
 
     if sid == "":
         sid = None
@@ -169,9 +168,9 @@ def get():
 # index is the row/column to retrieve
 def getMetadataChunk():
 
-    package_id = request.params.get('package_id')
-    resource_id = request.params.get('resource_id')
-    sheet_id = request.params.get('sheet_id')
+    package_id = request.args.get('package_id')
+    resource_id = request.args.get('resource_id')
+    sheet_id = request.args.get('sheet_id')
 
     if sheet_id == "":
         sheet_id = None
@@ -182,9 +181,9 @@ def getMetadataChunk():
 # also returns number of join rows/columns if metadata resource type
 def getMetadataInfo():
 
-    package_id = request.params.get('package_id')
-    resource_id = request.params.get('resource_id')
-    sheet_id = request.params.get('sheet_id')
+    package_id = request.args.get('package_id')
+    resource_id = request.args.get('resource_id')
+    sheet_id = request.args.get('sheet_id')
 
     if sheet_id == "":
         sheet_id = None
@@ -193,9 +192,9 @@ def getMetadataInfo():
 
 # get the number of spectra measurements found in the file
 def getSpectraCount():
-    package_id = request.params.get('package_id')
-    resource_id = request.params.get('resource_id')
-    sheet_id = request.params.get('sheet_id')
+    package_id = request.args.get('package_id')
+    resource_id = request.args.get('resource_id')
+    sheet_id = request.args.get('sheet_id')
 
     if sheet_id == "":
         sheet_id = None
@@ -215,7 +214,7 @@ def getByName(package_id, resource_name):
 
 # helper for getting index as int
 def _getIndex():
-    index = request.params.get('index')
+    index = request.args.get('index')
     if index is None:
         return 0
     else:

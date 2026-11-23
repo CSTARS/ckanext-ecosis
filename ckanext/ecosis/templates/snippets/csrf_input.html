@@ -1,0 +1,7 @@
+{#
+  Overrides core's snippet: only render the CSRF hidden input (and so only
+  create a session / set a session cookie) when CSRF protection is enabled.
+#}
+{% if h.ecosis_csrf_enabled() %}
+<input type="hidden" name="{{ g.csrf_field_name }}" value="{{ csrf_token() }}"/>
+{% endif %}

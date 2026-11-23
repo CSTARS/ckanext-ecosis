@@ -1,9 +1,0 @@
-{% ckan_extends %}
-
-{% block package_search_results_list %}
-    <div class="top-pager">
-        {{ c.page.pager(q=c.q) }}
-    </div>
-
-    {{ h.snippet('snippets/package_list.html', packages=c.page.items) }}
-{% endblock %}

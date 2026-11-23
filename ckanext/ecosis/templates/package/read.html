@@ -7,9 +7,9 @@
 {% endblock %}
 
 {% block package_notes %}
-  {% if c.pkg_notes_formatted %}
+  {% if pkg.notes %}
     <div class="notes embedded-content">
-      {{ c.pkg_notes_formatted }}
+      {{ h.render_markdown(h.get_translated(pkg, 'notes')) }}
     </div>
   {% endif %}
 

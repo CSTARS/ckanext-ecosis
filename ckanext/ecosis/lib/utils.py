@@ -1,4 +1,4 @@
-import urllib, json, datetime, re
+import urllib.parse, json, datetime, re
 import ckan.lib.helpers as h
 from flask import make_response
 import traceback, sys
@@ -6,21 +6,22 @@ import traceback, sys
 # replicating default param parsing in ckan... really python... really...
 # TODO: see if this is really needed
 def get_request_data(request):
+    # Flask request (CKAN 2.11+ removed the Pylons request.POST / request.body)
     try:
-        keys = request.POST.keys()
+        keys = list(request.form.keys())
         # Parsing breaks if there is a = in the value, so for now
         # we will check if the data is actually all in a single key
-        if keys and request.POST[keys[0]] in [u'1', u'']:
+        if keys and request.form[keys[0]] in [u'1', u'']:
             request_data = keys[0]
         else:
-            request_data = urllib.unquote(request.body)
+            request_data = urllib.parse.unquote(request.get_data(as_text=True))
     except Exception as inst:
         msg = "Could not find the POST data: %r : %s" % \
-              (request.POST, inst)
+              (request.form, inst)
         raise ValueError(msg)
 
     try:
-        request_data = h.json.loads(request_data, encoding='utf8')
+        request_data = json.loads(request_data)
     except ValueError as e:
         raise ValueError('Error decoding JSON data. '
                          'Error: %r '
