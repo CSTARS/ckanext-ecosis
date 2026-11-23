@@ -8,15 +8,15 @@ from ckanext.ecosis.datastore.vocab import gcmd
 
 # get a spectra measurement with joined metadata
 def get():
-    package_id = request.params.get('package_id')
-    resource_id = request.params.get('resource_id')
-    sheet_id = request.params.get('sheet_id')
+    package_id = request.args.get('package_id')
+    resource_id = request.args.get('resource_id')
+    sheet_id = request.args.get('sheet_id')
 
     return query.get(package_id, resource_id, sheet_id, _getIndex(), showProcessInfo=True)
 
 # get TOP suggestions for given attribute name
 def suggestAttributeName():
-    name = request.params.get('name')
+    name = request.args.get('name')
     if name is None:
         name = ""
 
@@ -29,7 +29,7 @@ def suggestOverview():
       'names' : request.form.get('names')
     }
     if params.get('names') is None:
-      params['names'] = request.params.get('names')
+      params['names'] = request.args.get('names')
 
     if params.get('names') is None:
         raise Exception('Name list not provided')
@@ -38,7 +38,7 @@ def suggestOverview():
 
 # Query NASA GCDM vocab
 def suggestGCMD():
-    query = request.params.get('query')
+    query = request.args.get('query')
     if query is None:
         query = ""
 
@@ -46,7 +46,7 @@ def suggestGCMD():
 
 
 def _getIndex():
-    index = request.params.get('index')
+    index = request.args.get('index')
     if index is None:
         return 0
     else:

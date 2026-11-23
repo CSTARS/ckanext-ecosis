@@ -1,6 +1,9 @@
+# PyJWT and psycopg2 are intentionally not pinned here: CKAN 2.12 pins its own
+# versions (pyjwt 2.x, psycopg2 2.9.x) and pinning older ones here would
+# downgrade them under CKAN.
 pymongo==3.11.2
-psycopg2==2.9.3
 xlrd==1.2.0
-PyJWT==1.7.1
 shortuuid==0.5.0
-boto3==1.20.37
+# boto3 1.20 (botocore 1.23) requires urllib3<1.27, which conflicts with
+# CKAN 2.12's urllib3 2.x
+boto3>=1.35,<2

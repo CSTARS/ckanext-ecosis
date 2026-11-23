@@ -309,10 +309,10 @@ def doiQuery():
             'message' : 'Nope.'
         }
 
-    query = request.params.get('query')
-    status = request.params.get('status')
-    offset = request.params.get('offset')
-    limit = request.params.get('limit')
+    query = request.args.get('query')
+    status = request.args.get('status')
+    offset = request.args.get('offset')
+    limit = request.args.get('limit')
 
     return package.doiQuery(query=query, status=status, offset=offset, limit=limit)
 
@@ -325,7 +325,7 @@ def clearDoi():
             'message' : 'Nope.'
         }
 
-    id = request.params.get('id')
+    id = request.args.get('id')
 
     context = get_context()
     pkg = logic.get_action('package_show')(context, {'id': id})

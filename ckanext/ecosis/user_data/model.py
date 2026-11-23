@@ -1,8 +1,8 @@
 import logging
 import datetime
 
-from sqlalchemy import Table, Column, types
-from ckan.model.meta import mapper, metadata, Session
+from sqlalchemy import Table, Column, types, inspect
+from ckan.model.meta import registry, metadata, Session
 from ckan.model.domain_object import DomainObject
 from ckan import model
 from ckan.model.types import make_uuid
@@ -20,12 +20,17 @@ def setup():
         define_table()
         log.debug('User github table defined in memory')
 
-    if not model.package_table.exists():
+    # CKAN 2.11+ (SQLAlchemy 2.0): metadata is no longer bound to the
+    # engine, so table checks/creation need the engine passed explicitly
+    engine = model.ensure_engine()
+    db = inspect(engine)
+
+    if not db.has_table(model.package_table.name):
         log.debug('User github table creation deferred')
         return
 
-    if not source_table.exists():
-        source_table.create()
+    if not db.has_table(source_table.name):
+        source_table.create(engine)
         log.debug('User github table created')
 
     else:
@@ -67,7 +72,8 @@ def define_table():
             Column('github_access_token', types.UnicodeText, default=u''),
             Column('github_data', types.UnicodeText, default=u'')
         )
-        mapper(UserGithubInfo, source_table)
+        # SQLAlchemy 2.0 removed orm.mapper(); use classical mapping via the registry
+        registry.map_imperatively(UserGithubInfo, source_table)
 
 
 class UserGithubInfo(DomainObject):
